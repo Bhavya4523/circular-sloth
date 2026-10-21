@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: circular-sloth
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LLM_PROVIDER
+        value: openai_compat
+      - key: BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: MODEL_NAME
+        value: google/gemma-4-26b-a4b-it:free
+      - key: FALLBACK_MODEL_NAME
+        value: ""
+      - key: API_KEY
+        sync: false
+      - key: RATE_LIMIT_PER_HOUR
+        value: "40"
+      - key: REQUEST_TIMEOUT_S
+        value: "120"
+      - key: MAX_CHARS
+        value: "24000"
