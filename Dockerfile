@@ -1,6 +1,8 @@
 FROM node:22-alpine AS frontend-build
 WORKDIR /frontend
-COPY web/package.json web/build.mjs web/index.html ./
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
 RUN npm run build
 
 FROM python:3.11-slim AS runtime
