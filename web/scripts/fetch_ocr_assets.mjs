@@ -8,8 +8,10 @@ const out = path.join(root, "public", "ocr");
 const require = createRequire(import.meta.url);
 const tesseractRoot = path.dirname(require.resolve("tesseract.js/package.json"));
 const coreRoot = path.dirname(require.resolve("tesseract.js-core/package.json"));
+const pdfRoot = path.dirname(require.resolve("pdfjs-dist/package.json"));
 await mkdir(out, { recursive: true });
 await copyFile(path.join(tesseractRoot, "dist", "worker.min.js"), path.join(out, "worker.min.js"));
+await copyFile(path.join(pdfRoot, "build", "pdf.worker.min.mjs"), path.join(root, "public", "pdf.worker.min.mjs"));
 for (const file of await readdir(coreRoot)) {
   if (/^tesseract-core.*\.(?:js|wasm)$/.test(file)) {
     await copyFile(path.join(coreRoot, file), path.join(out, file));

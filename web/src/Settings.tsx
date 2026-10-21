@@ -3,6 +3,7 @@ import type { ChangeEvent } from "react";
 import { db, getBackupData, isBackupData, noteLocalChange, restoreBackup, type Child, type Language, type Profile } from "./db";
 import { backupFilename, decryptBackup, encryptBackup, hashPin } from "./security";
 import { t } from "./i18n";
+import { ReaderStatus } from "./ReaderStatus";
 
 interface Props { profile: Profile; onProfileChange: (profile: Profile) => void; }
 
@@ -127,6 +128,14 @@ export function Settings({ profile, onProfileChange }: Props) {
     await db.delete(); window.location.assign("/");
   };
 
+  const exportCsv = async () => {
+    const rows = await db.items.toArray();
+    const quote = (value: string | number | null | undefined) => '"' + String(value ?? "").replaceAll('"', '""') + '"';
+    const csv = ["type,title,details,date,time,amount,audience,status", ...rows.map((item) => [item.type,item.title,item.details,item.date,item.time,item.amount,item.audience,item.status].map(quote).join(","))].join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "circular-sloth-items.csv"; link.click(); URL.revokeObjectURL(url);
+  };
+
   const updateChildField = (id: string, field: keyof Child, value: string) => {
     setChildren((list) => list.map((child) => child.id === id ? { ...child, [field]: value } : child));
   };
@@ -165,6 +174,10 @@ export function Settings({ profile, onProfileChange }: Props) {
     </section>
 
     <section className="settings-section"><h2>{t(language, "storageStatus")}</h2><p role="status">{storage ? t(language, "storageYes") : t(language, "storageNo")}</p><button className="button button--secondary" onClick={() => void requestPersistentStorage()}>{storage ? t(language, "requestAgain") : t(language, "requestPersist")}</button></section>
+
+    <section className="settings-section"><h2>Reader status</h2><ReaderStatus language={language}/></section>
+
+    <section className="settings-section"><h2>Export a readable copy</h2><p>This CSV is readable by anyone who opens it. Store it carefully.</p><button className="button button--secondary" onClick={() => void exportCsv()}>Download CSV</button></section>
 
     <section className="settings-section"><h2>{t(language, "backupRestore")}</h2><p>{t(language, "backupHelp")}</p><p>{profile.last_backup_at ? t(language, "lastBackup", { days: Math.max(0, Math.floor((Date.now() - new Date(profile.last_backup_at).getTime()) / 86_400_000)) }) : t(language, "noBackup")}</p>
       <label className="field-label" htmlFor="backup-passphrase">{t(language, "passphrase")}</label><input id="backup-passphrase" autoComplete="new-password" type="password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} />

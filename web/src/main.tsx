@@ -13,8 +13,12 @@ import "@fontsource/palanquin/devanagari-500.css";
 import "@fontsource/palanquin/devanagari-600.css";
 import "@fontsource/kalam/400.css";
 import "@fontsource/kalam/700.css";
+import "@fontsource/kalam/devanagari-400.css";
+import "@fontsource/kalam/devanagari-700.css";
 import App from "./App";
 import "./styles.css";
+import "./phase3.css";
+import "./phase3b.css";
 
 registerSW({ immediate: true });
 
