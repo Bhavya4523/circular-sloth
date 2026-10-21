@@ -81,6 +81,7 @@ For local Docker, `docker compose up --build` starts the app using `.env`. To st
 | Backend tests | 12 passed (Phase 1) |
 | Local Docker build | Passed (Phase 1) |
 | OpenRouter localhost smoke test | Ran against `.env`; free-tier calls were busy after 5 retries or returned malformed JSON, so the injected-value check did not pass |
+| Render live smoke test | Passed on retry: the live service returned the injected Rs 926 and 2027-03-28 exactly once |
 | Local-only Ollama `gemma3:4b` smoke test | Passed; returned injected Rs 730 and 2026-12-29 from localhost Ollama. The app made no hosted-provider call; the computer's internet connection itself was not disabled |
 | Synthetic extraction evaluation | Planned for Phase 4 |
 | OCR text accuracy | Planned for Phase 4 |

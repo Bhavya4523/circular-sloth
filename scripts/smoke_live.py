@@ -6,9 +6,13 @@ import random
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.tls import create_verified_ssl_context
 
 load_dotenv()
 
@@ -23,7 +27,7 @@ def main() -> int:
     event_date = today + timedelta(days=random.randint(35, 210))
     circular = f"School event and fee due date: {event_date.strftime('%d %B %Y')}. School event fee: Rs {amount}/-, payable on the event date above."
     deadline = time.monotonic() + 180
-    with httpx.Client(timeout=130) as client:
+    with httpx.Client(timeout=130, verify=create_verified_ssl_context()) as client:
         while True:
             try:
                 health = client.get(f"{base_url}/api/health")

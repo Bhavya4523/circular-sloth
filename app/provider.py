@@ -4,7 +4,6 @@ import asyncio
 import json
 import os
 import re
-import ssl
 import time
 from dataclasses import dataclass
 from typing import Any, TypeVar
@@ -12,6 +11,8 @@ from typing import Any, TypeVar
 import httpx
 from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
+
+from app.tls import create_verified_ssl_context
 
 load_dotenv()
 T = TypeVar("T", bound=BaseModel)
@@ -66,10 +67,7 @@ def _repair_json(text: str) -> str:
 
 class ModelProvider:
     def __init__(self, *, client: httpx.AsyncClient | None = None, sleep=asyncio.sleep):
-        # Build from the OS trust store without inheriting SSLKEYLOGFILE into a
-        # proxy-owned path (some managed Windows images expose a protected one).
-        tls = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        tls.load_default_certs()
+        tls = create_verified_ssl_context()
         self.client = client or httpx.AsyncClient(verify=tls)
         self._owns_client = client is None
         self.sleep = sleep
