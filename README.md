@@ -1,96 +1,103 @@
 # Circular Sloth
 
-One tap in WhatsApp, then zero effort. Circular Sloth turns school circulars into a short, reviewable list of what a parent needs to do. The parent approves suggested items before using them.
+Circular Sloth turns school circulars into a short, reviewable list of what a parent needs to do. Add a pasted message, photo, PDF, or shared item; extract text; review and edit suggestions; then save the items to the browser's local workspace. It also includes a weekly fridge slip, calendar export, summary, and reply drafting.
 
-## Why open-weight
-Circulars can include a child's class and school. Open-weight models can be run locally or through a provider that hosts open-weight models, and the provider can be changed without tying family records to one model company. Photos are intended to stay on the device; only extracted text is sent when using hosted mode.
+The project uses open-weight language models through OpenRouter or a compatible hosted endpoint, and can use Ollama locally. A model can make mistakes: parents must check every extracted item before saving or acting on it.
 
-## Ownership guarantees
-Every family's records belong in that family's browser profile. The server has no database, accounts, sessions, cookies, or request-data storage. It logs only response status and latency. Images are processed on-device and discarded. In hosted mode, extracted text (never photos) is sent momentarily to the configured third-party provider, such as OpenRouter and the company hosting the model; the server does not store that text, and the provider's own policies apply. Never send a child's name to the model; class labels are matched on-device.
+## Privacy and ownership
 
-Two people sharing the same browser profile share its data. The optional PIN is meant to deter casual snooping, not to encrypt the browser's live data. Use the encrypted backup to move or protect a copy of family records. This initial backend phase does not yet include the browser workspace or backup UI.
+- Family records are stored in IndexedDB in the browser profile. The server has no accounts, database, cookies, or family-record storage.
+- Photos and PDFs are processed in the browser; the app sends extracted text to the API when model assistance is requested. In hosted mode that text is sent to the configured model provider. The provider's retention and privacy policies apply.
+- Child and teacher names are not included in the model's reply-drafting request. Class matching happens on-device.
+- The optional PIN deters casual access; it does not encrypt the browser's live workspace. Encrypted export is available for backups. A plaintext CSV export is also available and should be handled carefully.
+- People using the same browser profile share its workspace. There is no cross-device synchronization.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  P[Parent's browser] -->|circular text, date, language| S[Stateless FastAPI service]
-  P -->|family records| IDB[(Browser IndexedDB, added in Phase 2)]
-  P -->|photos| OCR[On-device OCR, added in Phase 2]
-  S -->|model request| M[OpenRouter open-weight model or local Ollama]
-  M -->|structured response| S
-  S -->|items, summary, reply| P
+  P[Parent's browser] -->|text, dates, language| S[Stateless FastAPI service]
+  P -->|family records| IDB[(IndexedDB)]
+  P -->|photos and PDFs| OCR[On-device OCR and PDF text extraction]
+  S -->|model request| M[Hosted open-weight model or local Ollama]
+  M -->|structured suggestions| S --> P
 ```
 
-The API uses FastAPI and Pydantic, with OpenAI-compatible and Ollama adapters. Each service instance limits model calls to two concurrent requests and keeps an in-memory per-IP request limit. It has no persistent disk, database, or request-body logging.
+The API uses FastAPI and Pydantic with OpenAI-compatible and Ollama adapters. Each instance limits model calls to two concurrent requests and applies an in-memory per-IP request limit. Request bodies and extracted text are not logged. The frontend is React, TypeScript, and Vite; IndexedDB uses Dexie, OCR uses Tesseract.js, and PDFs use PDF.js.
 
-## Setup
+## Development
 
-### A. Fully local with Ollama
+Requirements: Python 3.11+, Node.js 22+, and (for the offline model) Ollama with `gemma3:4b` pulled. Copy `.env.example` to `.env` and set `API_KEY` for hosted development. Never commit `.env`.
 
-Ollama and `gemma3:4b` are installed locally. To verify fully offline, disconnect the network after the model is available and run the API and smoke script using the process settings below:
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+cd web
+npm ci
+npm run build
+npm test
+cd ..
+python -m pytest
+```
+
+Start the API with `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log`. Start the web app in another terminal with `cd web; npm run dev`; Vite proxies API requests to localhost.
+
+### Offline Ollama check
+
+Pull the model before going offline, then start Ollama and the API. The app's API requests must use Ollama directly. Disconnecting internet is the strongest way to prove no hosted call is possible.
 
 ```powershell
 ollama pull gemma3:4b
-ollama serve
-```
-
-In a second PowerShell window, configure the process for the local run and start the API:
-
-```powershell
 $env:LLM_PROVIDER = 'ollama'
 $env:BASE_URL = 'http://localhost:11434'
 $env:MODEL_NAME = 'gemma3:4b'
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
-Keep `ollama serve` running. The app makes model calls to the local Ollama endpoint. After the model is pulled, reading can work without internet. Verify with:
+Then run `python scripts/smoke_live.py http://127.0.0.1:8000`. The documented local smoke result was successful; internet disconnection was not performed during that run, so it verifies the Ollama path rather than a fully isolated network.
 
-```powershell
-.\.venv\Scripts\python.exe scripts/smoke_live.py http://127.0.0.1:8000
-```
+### Docker
 
-### B. Hosted on Render with OpenRouter
+The Dockerfile builds the Vite frontend and serves it through the FastAPI app. With `.env` configured, run `docker compose up --build`. For local Ollama in Compose, start the optional service with `docker compose --profile offline up -d ollama`, pull the model using `docker compose exec ollama ollama pull gemma3:4b`, and set the app's `LLM_PROVIDER=ollama`, `BASE_URL=http://ollama:11434`, and `MODEL_NAME=gemma3:4b`.
 
-1. Push the repo to GitHub, then create a Render Blueprint from the repository and apply `render.yaml`.
-2. In the Render service's Environment page, set `API_KEY` by typing your OpenRouter key directly into the dashboard. Do not paste it into a repo file or chat.
-3. The Blueprint defaults are `LLM_PROVIDER=openai_compat`, `BASE_URL=https://openrouter.ai/api/v1`, and `MODEL_NAME=google/gemma-4-26b-a4b-it:free`.
-4. Wait for deployment and verify the service with `python scripts/smoke_live.py https://YOUR-SERVICE.onrender.com`.
+### Hosted Render deployment
 
-Free models may be busy. To switch to the paid version of the same model, remove `:free` from `MODEL_NAME` in Render. Provider pricing and availability can change.
+The repository includes `render.yaml`. Create a Render Blueprint from the GitHub repository, then set `API_KEY` in the service's Environment dashboard. The configured hosted provider uses `LLM_PROVIDER=openai_compat`, `BASE_URL=https://openrouter.ai/api/v1`, and `MODEL_NAME=google/gemma-4-26b-a4b-it:free`. Never put the API key in source control or a client-side variable. Verify a deployment with `python scripts/smoke_live.py https://YOUR-SERVICE.onrender.com`.
 
-### C. Self-hosted model
+Free model capacity can be unavailable or rate-limited. Removing `:free` selects the paid model variant and may incur charges. Availability and pricing change over time.
 
-Set `LLM_PROVIDER=ollama`, `BASE_URL` to the Ollama server's reachable URL, and `MODEL_NAME` to a locally available open-weight model. For an OpenAI-compatible vLLM endpoint, use `LLM_PROVIDER=openai_compat`, a `BASE_URL` ending in `/v1`, the open-weight model name, and its API key if required. Keep the model endpoint on infrastructure you control.
+### Other self-hosted providers
 
-For local Docker, `docker compose up --build` starts the app using `.env`. To start the optional Ollama container, first run `docker compose --profile offline up -d ollama`, pull the model with `docker compose exec ollama ollama pull gemma3:4b`, and configure the app to use `BASE_URL=http://ollama:11434`, `LLM_PROVIDER=ollama`, and `MODEL_NAME=gemma3:4b`.
+For Ollama, use `LLM_PROVIDER=ollama`, a reachable `BASE_URL`, and a model already pulled on that host. For a vLLM or other OpenAI-compatible endpoint, use `LLM_PROVIDER=openai_compat`, its `/v1` base URL, model name, and key if required. Keep endpoints on infrastructure you control if you need to control text retention.
 
-## API and limits
+## API
 
 - `GET /api/health` checks the configured model and caches the result for 30 seconds.
 - `POST /api/read` accepts up to 30 chunks and 24,000 total text characters by default.
 - `POST /api/summary` returns three short lines.
-- `POST /api/reply` drafts a short polite message. Optional child and teacher labels are intentionally omitted from the model request.
-- 429/5xx model responses retry with increasing waits and honor `Retry-After`; an optional `FALLBACK_MODEL_NAME` is tried after primary failures.
-- Request size, timeout and per-IP hourly limit can be configured with `MAX_CHARS`, `REQUEST_TIMEOUT_S` and `RATE_LIMIT_PER_HOUR`.
+- `POST /api/reply` drafts a short polite message without sending child or teacher labels to the model.
+- 429/5xx responses retry with increasing waits and honor `Retry-After`; `FALLBACK_MODEL_NAME` optionally supplies a fallback.
+- `MAX_CHARS`, `REQUEST_TIMEOUT_S`, and `RATE_LIMIT_PER_HOUR` configure request size, timeout, and the per-instance hourly limit.
 
-## Results
+## Verification results
 
 | Check | Result |
 |---|---|
-| Backend tests | 12 passed (Phase 1) |
-| Local Docker build | Passed (Phase 1) |
-| OpenRouter localhost smoke test | Ran against `.env`; free-tier calls were busy after 5 retries or returned malformed JSON, so the injected-value check did not pass |
-| Render live smoke test | Passed on retry: the live service returned the injected Rs 926 and 2027-03-28 exactly once |
-| Local-only Ollama `gemma3:4b` smoke test | Passed; returned injected Rs 730 and 2026-12-29 from localhost Ollama. The app made no hosted-provider call; the computer's internet connection itself was not disabled |
-| Synthetic extraction evaluation | Planned for Phase 4 |
-| OCR text accuracy | Planned for Phase 4 |
+| Backend tests | 12 passed |
+| Frontend tests | 7 passed |
+| TypeScript and production frontend build | Passed |
+| OpenRouter localhost smoke | Health reported the provider as busy; the read call then failed with a remote connection reset. The injected-value check did not pass |
+| Ollama localhost smoke | Passed with `gemma3:4b`; returned injected Rs 756 and 2027-02-16 exactly once. The machine stayed online; all model requests went to localhost Ollama |
+| Render live health and smoke | Health was ready; smoke passed with injected Rs 285 and 2027-05-01 exactly once |
+| Docker image build | Not completed: Docker Desktop's Linux engine returned an internal API error during startup |
+| Multilingual extraction evaluation | On 30 synthetic notices, configured free OpenRouter model yielded 1/31 expected items (3%), 0 extra items, 100% date accuracy on the one matched item, 0% amount accuracy, 100% audience accuracy on that one match, median latency 19.5s, and 29 provider errors |
+| OCR text accuracy | 99.4% character accuracy (178/179); 4/5 exact snippets on five locally rendered synthetic English, Hindi, and Marathi samples. Rendering used the Windows Mangal font |
 
-## Limitations
-Models and OCR can misread a notice, so the parent must review extracted items. Hosted free-tier models can be busy. The phone app, OCR pipeline, local encrypted backup, calendar reminders, and cross-device sync are not part of the current backend phase. Calendar reminders will rely on the user's calendar app. No iPhone share target is promised.
+To reproduce the small Windows OCR check, run `./eval/ocr_check.ps1`. The script renders only the synthetic examples in `eval/ocr_samples.json`, runs the same locally bundled Tesseract.js language data, prints the recognized text and character accuracy, and removes its temporary images.
 
-## Roadmap
-- Build the offline-first browser workspace, encrypted backup and local PIN in Phase 2.
-- Add circular input, local OCR, review, the weekly fridge slip, calendar export, summary and reply in Phase 3.
-- Evaluate English, Hindi, Marathi and Hinglish notices; polish the design and accessibility in Phase 4.
-- Explore fine-tuning on Hinglish and Marathi school notices with Tinker, and local voice notes with Whisper.
+Synthetic evaluation data contains no real children's or school records. The low extraction score is not a meaningful model-quality estimate because 29 requests failed at the provider; it shows the free endpoint was unreliable during this run. Results are not a guarantee of accuracy on real notices.
+
+## Limitations and next steps
+
+Extraction and OCR can misread a notice. Always review suggestions. Hosted free models can be unavailable. The browser workspace has no cross-device sync; calendar alerts rely on the user's calendar app; no iPhone share target is promised. Follow-up work could evaluate more real-world variation using consented, de-identified data, improve Hindi/Marathi OCR, and explore fine-tuning for Hinglish and Marathi with Tinker or local voice-note transcription with Whisper.

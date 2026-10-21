@@ -51,7 +51,11 @@ def main() -> int:
         }
         response = None
         for attempt in range(5):
-            response = client.post(f"{base_url}/api/read", json=request)
+            try:
+                response = client.post(f"{base_url}/api/read", json=request)
+            except httpx.HTTPError as exc:
+                print(f"FAIL: /api/read network error ({type(exc).__name__}): {exc}")
+                return 1
             if response.status_code != 503 or "busy" not in response.text.lower():
                 break
             if attempt < 4:

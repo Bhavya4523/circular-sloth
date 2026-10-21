@@ -1,0 +1,10 @@
+{
+  "description": "Synthetic, non-personal text snippets for a small OCR smoke evaluation.",
+  "samples": [
+    { "id": "en-01", "language": "eng", "text": "Class 4: Bring a notebook on Friday 23 October." },
+    { "id": "en-02", "language": "eng", "text": "Class 2: Pay Rs 750 by Monday." },
+    { "id": "hi-01", "language": "hin", "text": "कक्षा ५: शुक्रवार को पुस्तक लाएँ।" },
+    { "id": "hi-02", "language": "hin", "text": "कृपया २० अक्टूबर तक शुल्क जमा करें।" },
+    { "id": "mr-01", "language": "mar", "text": "इयत्ता ३: सहलीसाठी उद्या सकाळी या." }
+  ]
+}

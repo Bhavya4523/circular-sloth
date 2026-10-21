@@ -35,6 +35,16 @@ VERSION = os.getenv("APP_VERSION", "0.1.0")
 MAX_CHARS = int(os.getenv("MAX_CHARS", "24000"))
 RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_HOUR", "40"))
 RATE_WINDOW = 3600
+READ_SYSTEM_PROMPT = (
+    "You read school circulars in English, Hindi, Marathi, and Hinglish. Return JSON with items and warnings. "
+    "Extract only actionable or schedule-affecting information; ignore greetings, forwarded chatter, and signatures. "
+    "Resolve relative dates against the supplied today date and output ISO dates. Understand rupee formats (Rs, ₹, /-). "
+    "Put a mentioned rupee amount in amount as an integer number of rupees, not null. Put any explicit event or due date in date as YYYY-MM-DD, including for payment deadlines; never leave date null when a date appears in that item's source text. Use end_date only for a stated range. "
+    "Keep titles in their original language. Set audience precisely when a class is named, otherwise all. "
+    "Never invent information. Unclear information should be info with low confidence and a warning. "
+    "Each item must include chunk_id,type,title,details,date,end_date,time,amount,audience,confidence,source_text. "
+    "Types are wear,bring,pay,sign,attend,holiday,deadline,info. Return no prose outside JSON."
+)
 _requests: dict[str, deque[float]] = defaultdict(deque)
 _health_cache: tuple[float, dict[str, Any]] | None = None
 _health_lock = asyncio.Lock()
@@ -136,19 +146,9 @@ async def read_circular(payload: ReadRequest) -> ReadResult:
         raise HTTPException(status_code=413, detail=f"Circular text exceeds the {MAX_CHARS} character limit.")
     today = payload.today.isoformat()
     language = payload.language_hint or "the language present in the circular"
-    system = (
-        "You read school circulars in English, Hindi, Marathi, and Hinglish. Return JSON with items and warnings. "
-        "Extract only actionable or schedule-affecting information; ignore greetings, forwarded chatter, and signatures. "
-        "Resolve relative dates against the supplied today date and output ISO dates. Understand rupee formats (Rs, ₹, /-). "
-        "Put a mentioned rupee amount in amount as an integer number of rupees, not null. Put any explicit event or due date in date as YYYY-MM-DD, including for payment deadlines; never leave date null when a date appears in that item's source text. Use end_date only for a stated range. "
-        "Keep titles in their original language. Set audience precisely when a class is named, otherwise all. "
-        "Never invent information. Unclear information should be info with low confidence and a warning. "
-        "Each item must include chunk_id,type,title,details,date,end_date,time,amount,audience,confidence,source_text. "
-        "Types are wear,bring,pay,sign,attend,holiday,deadline,info. Return no prose outside JSON."
-    )
     user = f"today={today}; language_hint={language}\nchunks={payload.model_dump_json(include={'chunks'})}"
     try:
-        return await provider.generate(system, user, ReadResult)
+        return await provider.generate(READ_SYSTEM_PROMPT, user, ReadResult)
     except ProviderError as exc:
         raise _model_error(exc) from exc
 
